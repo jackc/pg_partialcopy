@@ -199,7 +199,10 @@ database_url = "dbname=pgsubset_test_destination"
 
 [[steps]]
 table_name = "a"
-before_copy_sql = "insert into a (id) values (4), (5), (6)"`)
+before_copy_sql = """
+select 'ensure multiple statements work';
+insert into a (id) values (4), (5), (6);
+"""`)
 	require.NoError(t, err)
 
 	destinationConn := connectToDestination(t)
@@ -225,7 +228,10 @@ database_url = "dbname=pgsubset_test_destination"
 
 [[steps]]
 table_name = "a"
-after_copy_sql = "delete from a where id > 1"`)
+after_copy_sql = """
+select 'ensure multiple statements work';
+delete from a where id > 1
+"""`)
 	require.NoError(t, err)
 
 	destinationConn := connectToDestination(t)

@@ -190,9 +190,9 @@ func recreateForeignKeyConstraints(ctx context.Context, conn *pgconn.PgConn, com
 
 func executeStep(ctx context.Context, sourceConn, destinationConn *pgconn.PgConn, step *Step) error {
 	if step.BeforeCopySQL != "" {
-		result := destinationConn.ExecParams(ctx, step.BeforeCopySQL, nil, nil, nil, nil).Read()
-		if result.Err != nil {
-			return fmt.Errorf("error executing before copy SQL: %w", result.Err)
+		err := destinationConn.Exec(ctx, step.BeforeCopySQL).Close()
+		if err != nil {
+			return fmt.Errorf("error executing before copy SQL: %w", err)
 		}
 	}
 
@@ -230,9 +230,9 @@ func executeStep(ctx context.Context, sourceConn, destinationConn *pgconn.PgConn
 	}
 
 	if step.AfterCopySQL != "" {
-		result := destinationConn.ExecParams(ctx, step.AfterCopySQL, nil, nil, nil, nil).Read()
-		if result.Err != nil {
-			return fmt.Errorf("error executing after copy SQL: %w", result.Err)
+		err := destinationConn.Exec(ctx, step.AfterCopySQL).Close()
+		if err != nil {
+			return fmt.Errorf("error executing after copy SQL: %w", err)
 		}
 	}
 
