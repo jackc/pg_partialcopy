@@ -213,3 +213,24 @@ before_copy_sql = "insert into a (id) values (4), (5), (6)"`)
 	require.Equal(t, "5", string(result.Rows[4][0]))
 	require.Equal(t, "6", string(result.Rows[5][0]))
 }
+
+func TestPgsubsetAfterCopySQL(t *testing.T) {
+	ctx := t.Context()
+	err := parseAndRun(ctx, `[source]
+database_url = "dbname=pgsubset_test_source"
+
+[destination]
+prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
+database_url = "dbname=pgsubset_test_destination"
+
+[[steps]]
+table_name = "a"
+after_copy_sql = "delete from a where id > 1"`)
+	require.NoError(t, err)
+
+	destinationConn := connectToDestination(t)
+	result := destinationConn.ExecParams(ctx, "select * from a order by id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 1, len(result.Rows))
+	require.Equal(t, "1", string(result.Rows[0][0]))
+}

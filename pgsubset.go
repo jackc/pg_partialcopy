@@ -32,6 +32,7 @@ type Step struct {
 	TableName     string `toml:"table_name"`
 	SelectSQL     string `toml:"select_sql"`
 	BeforeCopySQL string `toml:"before_copy_sql"`
+	AfterCopySQL  string `toml:"after_copy_sql"`
 }
 
 func parseConfigFile(configFilePath string) (*Config, error) {
@@ -226,6 +227,13 @@ func executeStep(ctx context.Context, sourceConn, destinationConn *pgconn.PgConn
 
 	if err := g.Wait(); err != nil {
 		return err
+	}
+
+	if step.AfterCopySQL != "" {
+		result := destinationConn.ExecParams(ctx, step.AfterCopySQL, nil, nil, nil, nil).Read()
+		if result.Err != nil {
+			return fmt.Errorf("error executing after copy SQL: %w", result.Err)
+		}
 	}
 
 	return nil
