@@ -240,3 +240,32 @@ delete from a where id > 1
 	require.Equal(t, 1, len(result.Rows))
 	require.Equal(t, "1", string(result.Rows[0][0]))
 }
+
+func TestPgsubsetTempTable(t *testing.T) {
+	ctx := t.Context()
+	err := parseAndRun(ctx, `[source]
+database_url = "dbname=pgsubset_test_source"
+
+[destination]
+prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
+database_url = "dbname=pgsubset_test_destination"
+
+[[steps]]
+table_name = "temp_a"
+select_sql = "select * from a"
+before_copy_sql = "create temporary table temp_a (like a)"
+after_copy_sql = """
+update temp_a set id = id * 10;
+insert into a (id) select id from temp_a;
+"""
+`)
+	require.NoError(t, err)
+
+	destinationConn := connectToDestination(t)
+	result := destinationConn.ExecParams(ctx, "select * from a order by id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 3, len(result.Rows))
+	require.Equal(t, "10", string(result.Rows[0][0]))
+	require.Equal(t, "20", string(result.Rows[1][0]))
+	require.Equal(t, "30", string(result.Rows[2][0]))
+}
