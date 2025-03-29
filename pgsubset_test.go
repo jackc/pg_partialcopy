@@ -187,3 +187,29 @@ table_name = "a"`)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "violates foreign key constraint")
 }
+
+func TestPgsubsetBeforeCopySQL(t *testing.T) {
+	ctx := t.Context()
+	err := parseAndRun(ctx, `[source]
+database_url = "dbname=pgsubset_test_source"
+
+[destination]
+prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
+database_url = "dbname=pgsubset_test_destination"
+
+[[steps]]
+table_name = "a"
+before_copy_sql = "insert into a (id) values (4), (5), (6)"`)
+	require.NoError(t, err)
+
+	destinationConn := connectToDestination(t)
+	result := destinationConn.ExecParams(ctx, "select * from a order by id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 6, len(result.Rows))
+	require.Equal(t, "1", string(result.Rows[0][0]))
+	require.Equal(t, "2", string(result.Rows[1][0]))
+	require.Equal(t, "3", string(result.Rows[2][0]))
+	require.Equal(t, "4", string(result.Rows[3][0]))
+	require.Equal(t, "5", string(result.Rows[4][0]))
+	require.Equal(t, "6", string(result.Rows[5][0]))
+}

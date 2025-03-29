@@ -29,8 +29,9 @@ type ConfigDestination struct {
 }
 
 type Step struct {
-	TableName string `toml:"table_name"`
-	SelectSQL string `toml:"select_sql"`
+	TableName     string `toml:"table_name"`
+	SelectSQL     string `toml:"select_sql"`
+	BeforeCopySQL string `toml:"before_copy_sql"`
 }
 
 func parseConfigFile(configFilePath string) (*Config, error) {
@@ -187,6 +188,13 @@ func recreateForeignKeyConstraints(ctx context.Context, conn *pgconn.PgConn, com
 }
 
 func executeStep(ctx context.Context, sourceConn, destinationConn *pgconn.PgConn, step *Step) error {
+	if step.BeforeCopySQL != "" {
+		result := destinationConn.ExecParams(ctx, step.BeforeCopySQL, nil, nil, nil, nil).Read()
+		if result.Err != nil {
+			return fmt.Errorf("error executing before copy SQL: %w", result.Err)
+		}
+	}
+
 	r, w := io.Pipe()
 	g := &errgroup.Group{}
 	g.Go(func() error {
