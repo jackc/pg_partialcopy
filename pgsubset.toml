@@ -1,0 +1,9 @@
+[source]
+database_url = "dbname=source"
+
+[destination]
+prepare_command = "dropdb --if-exists destination && createdb destination"
+database_url = "dbname=destination"
+
+[[steps]]
+table_name = "copy_all"
