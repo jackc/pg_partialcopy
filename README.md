@@ -1,3 +1,5 @@
+[![Build Status](https://github.com/jackc/pgsubset/actions/workflows/ci.yml/badge.svg)](https://github.com/jackc/pgsubset/actions/workflows/ci.yml)
+
 # pgsubset
 
 pgsubset is a tool for making a consistent copy of a specified subset of a database.
