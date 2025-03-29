@@ -104,7 +104,7 @@ table_name = "a"`)
 	require.Equal(t, "3", string(result.Rows[2][0]))
 }
 
-func TestPgsubsetSelectSQL(t *testing.T) {
+func TestPgsubsetSelectSQLFilterRows(t *testing.T) {
 	ctx := t.Context()
 	err := parseAndRun(ctx, `[source]
 database_url = "dbname=pgsubset_test_source"
@@ -124,4 +124,66 @@ select_sql = "select id from a where id > 1"`)
 	require.Equal(t, 2, len(result.Rows))
 	require.Equal(t, "2", string(result.Rows[0][0]))
 	require.Equal(t, "3", string(result.Rows[1][0]))
+}
+
+func TestPgsubsetSelectSQLTransformRows(t *testing.T) {
+	ctx := t.Context()
+	err := parseAndRun(ctx, `[source]
+database_url = "dbname=pgsubset_test_source"
+
+[destination]
+prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
+database_url = "dbname=pgsubset_test_destination"
+
+[[steps]]
+table_name = "a"
+select_sql = "select id*2 from a"`)
+	require.NoError(t, err)
+
+	destinationConn := connectToDestination(t)
+	result := destinationConn.ExecParams(ctx, "select * from a order by id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 3, len(result.Rows))
+	require.Equal(t, "2", string(result.Rows[0][0]))
+	require.Equal(t, "4", string(result.Rows[1][0]))
+	require.Equal(t, "6", string(result.Rows[2][0]))
+}
+
+func TestPgsubsetForeignKeys(t *testing.T) {
+	ctx := t.Context()
+
+	// The step to copy b happens before the step to copy a, so a crash will occur unless the foreign key is removed.
+	err := parseAndRun(ctx, `[source]
+database_url = "dbname=pgsubset_test_source"
+
+[destination]
+prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
+database_url = "dbname=pgsubset_test_destination"
+
+[[steps]]
+table_name = "b"
+
+[[steps]]
+table_name = "a"`)
+	require.NoError(t, err)
+
+	destinationConn := connectToDestination(t)
+	result := destinationConn.ExecParams(ctx, "select * from b order by id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 3, len(result.Rows))
+	require.Equal(t, "1", string(result.Rows[0][0]))
+	require.Equal(t, "2", string(result.Rows[1][0]))
+	require.Equal(t, "3", string(result.Rows[2][0]))
+
+	result = destinationConn.ExecParams(ctx, "select * from a order by id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 3, len(result.Rows))
+	require.Equal(t, "1", string(result.Rows[0][0]))
+	require.Equal(t, "2", string(result.Rows[1][0]))
+	require.Equal(t, "3", string(result.Rows[2][0]))
+
+	// Ensure the foreign key constraint has been restored.
+	result = destinationConn.ExecParams(ctx, "insert into b (id) values (4)", nil, nil, nil, nil).Read()
+	require.Error(t, result.Err)
+	require.Contains(t, result.Err.Error(), "violates foreign key constraint")
 }
