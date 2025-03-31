@@ -55,7 +55,7 @@ func parseConfig(s string) (*Config, error) {
 	return &config, nil
 }
 
-func pgsubset(ctx context.Context, config *Config) error {
+func pgPartialCopy(ctx context.Context, config *Config) error {
 	sourceConn, err := pgconn.Connect(ctx, config.Source.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("error connecting to source database: %w", err)

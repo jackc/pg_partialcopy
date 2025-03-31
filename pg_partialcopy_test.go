@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const sourceDatabaseName = "pgsubset_test_source"
+const sourceDatabaseName = "pg_partialcopy_test_source"
 const sourceDatabaseURL = "dbname=" + sourceDatabaseName
-const destinationDatabaseName = "pgsubset_test_destination"
+const destinationDatabaseName = "pg_partialcopy_test_destination"
 const destinationDatabaseURL = "dbname=" + destinationDatabaseName
 const setupSourceSQL = `drop table if exists a;
 create table a (
@@ -64,9 +64,9 @@ func parseAndRun(ctx context.Context, conf string) error {
 		return fmt.Errorf("error parsing config: %w", err)
 	}
 
-	err = pgsubset(ctx, config)
+	err = pgPartialCopy(ctx, config)
 	if err != nil {
-		return fmt.Errorf("error running pgsubset: %w", err)
+		return fmt.Errorf("error running pg_partialcopy: %w", err)
 	}
 
 	return nil
@@ -82,14 +82,14 @@ func connectToDestination(t *testing.T) *pgconn.PgConn {
 	return destinationConn
 }
 
-func TestPgsubsetDefaultCopyAll(t *testing.T) {
+func TestPGPartialCopyDefaultCopyAll(t *testing.T) {
 	ctx := t.Context()
 	err := parseAndRun(ctx, `[source]
-database_url = "dbname=pgsubset_test_source"
+database_url = "dbname=pg_partialcopy_test_source"
 
 [destination]
-prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
-database_url = "dbname=pgsubset_test_destination"
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
 
 [[steps]]
 table_name = "a"`)
@@ -104,14 +104,14 @@ table_name = "a"`)
 	require.Equal(t, "3", string(result.Rows[2][0]))
 }
 
-func TestPgsubsetSelectSQLFilterRows(t *testing.T) {
+func TestPGPartialCopySelectSQLFilterRows(t *testing.T) {
 	ctx := t.Context()
 	err := parseAndRun(ctx, `[source]
-database_url = "dbname=pgsubset_test_source"
+database_url = "dbname=pg_partialcopy_test_source"
 
 [destination]
-prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
-database_url = "dbname=pgsubset_test_destination"
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
 
 [[steps]]
 table_name = "a"
@@ -126,14 +126,14 @@ select_sql = "select id from a where id > 1"`)
 	require.Equal(t, "3", string(result.Rows[1][0]))
 }
 
-func TestPgsubsetSelectSQLTransformRows(t *testing.T) {
+func TestPGPartialCopySelectSQLTransformRows(t *testing.T) {
 	ctx := t.Context()
 	err := parseAndRun(ctx, `[source]
-database_url = "dbname=pgsubset_test_source"
+database_url = "dbname=pg_partialcopy_test_source"
 
 [destination]
-prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
-database_url = "dbname=pgsubset_test_destination"
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
 
 [[steps]]
 table_name = "a"
@@ -149,16 +149,16 @@ select_sql = "select id*2 from a"`)
 	require.Equal(t, "6", string(result.Rows[2][0]))
 }
 
-func TestPgsubsetForeignKeys(t *testing.T) {
+func TestPGPartialCopyForeignKeys(t *testing.T) {
 	ctx := t.Context()
 
 	// The step to copy b happens before the step to copy a, so a crash will occur unless the foreign key is removed.
 	err := parseAndRun(ctx, `[source]
-database_url = "dbname=pgsubset_test_source"
+database_url = "dbname=pg_partialcopy_test_source"
 
 [destination]
-prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
-database_url = "dbname=pgsubset_test_destination"
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
 
 [[steps]]
 table_name = "b"
@@ -188,14 +188,14 @@ table_name = "a"`)
 	require.Contains(t, result.Err.Error(), "violates foreign key constraint")
 }
 
-func TestPgsubsetBeforeCopySQL(t *testing.T) {
+func TestPGPartialCopyBeforeCopySQL(t *testing.T) {
 	ctx := t.Context()
 	err := parseAndRun(ctx, `[source]
-database_url = "dbname=pgsubset_test_source"
+database_url = "dbname=pg_partialcopy_test_source"
 
 [destination]
-prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
-database_url = "dbname=pgsubset_test_destination"
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
 
 [[steps]]
 table_name = "a"
@@ -217,14 +217,14 @@ insert into a (id) values (4), (5), (6);
 	require.Equal(t, "6", string(result.Rows[5][0]))
 }
 
-func TestPgsubsetAfterCopySQL(t *testing.T) {
+func TestPGPartialCopyAfterCopySQL(t *testing.T) {
 	ctx := t.Context()
 	err := parseAndRun(ctx, `[source]
-database_url = "dbname=pgsubset_test_source"
+database_url = "dbname=pg_partialcopy_test_source"
 
 [destination]
-prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
-database_url = "dbname=pgsubset_test_destination"
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
 
 [[steps]]
 table_name = "a"
@@ -241,14 +241,14 @@ delete from a where id > 1
 	require.Equal(t, "1", string(result.Rows[0][0]))
 }
 
-func TestPgsubsetTempTable(t *testing.T) {
+func TestPGPartialCopyTempTable(t *testing.T) {
 	ctx := t.Context()
 	err := parseAndRun(ctx, `[source]
-database_url = "dbname=pgsubset_test_source"
+database_url = "dbname=pg_partialcopy_test_source"
 
 [destination]
-prepare_command = "dropdb --if-exists pgsubset_test_destination && createdb pgsubset_test_destination"
-database_url = "dbname=pgsubset_test_destination"
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
 
 [[steps]]
 table_name = "temp_a"

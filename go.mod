@@ -1,4 +1,4 @@
-module github.com/jackc/pgsubset
+module github.com/jackc/pg_partialcopy
 
 go 1.24.1
 

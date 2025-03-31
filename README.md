@@ -1,24 +1,24 @@
-[![Build Status](https://github.com/jackc/pgsubset/actions/workflows/ci.yml/badge.svg)](https://github.com/jackc/pgsubset/actions/workflows/ci.yml)
+[![Build Status](https://github.com/jackc/pg_partialcopy/actions/workflows/ci.yml/badge.svg)](https://github.com/jackc/pg_partialcopy/actions/workflows/ci.yml)
 
-# pgsubset
+# pg_partialcopy
 
-pgsubset is a tool for making a consistent copy of a specified subset of a database.
+pg_partialcopy is a tool for making a consistent copy of a specified subset of a database.
 
 The primary use case of this tool is for developers who need production-like data for development. Using a copy of
 production in development is often impossible due to the size of production as well as security and compliance concerns.
 
-pgsubset can filter the rows that are copied as well as transform the copied data to redact sensitive data.
+pg_partialcopy can filter the rows that are copied as well as transform the copied data to redact sensitive data.
 
 ## Installation
 
 ```
-go install github.com/jackc/pgsubset@latest
+go install github.com/jackc/pg_partialcopy@latest
 ```
 
 ## Usage
 
 ```
-pgsubset <config-file>
+pg_partialcopy <config-file>
 ```
 
 Config file is a [TOML](https://toml.io/) file.

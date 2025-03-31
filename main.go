@@ -21,7 +21,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	err = pgsubset(ctx, config)
+	err = pgPartialCopy(ctx, config)
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
@@ -29,5 +29,5 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("Usage: pgsubset <config-file>")
+	fmt.Println("Usage: pg_partialcopy <config-file>")
 }
