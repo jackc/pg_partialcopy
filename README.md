@@ -73,6 +73,26 @@ drop table temp_people;
 
 ```
 
+## How It Works
+
+1. Establish connection to source database.
+2. Execute source.before_transaction_sql. This is typically used to store the IDs of selected records when they must be referenced in multiple steps.
+3. Begin a serializable read only deferrable transaction. This type of transaction is guaranteed to not block any other connections and to get a consistent snapshot.
+4. Use `pg_export_snapshot()` to get the snapshot ID.
+5. Call `pg_dump` with the snapshot ID and dump the structure of the source database.
+6. Execute `destination.prepare_command` with `sh`.
+7. Load the structure from the source into the destination.
+8. Drop foreign key constraints.
+9. Execute each step.
+10. Recreate foreign key constraints.
+
+For each step:
+
+1. Execute `before_copy_sql` on the destination.
+2. Use the `COPY` protocol to copy data from the source to the destination.
+3. Execute `after_copy_sql` on the destination.
+
+
 
 ## Testing
 
