@@ -20,7 +20,8 @@ type Config struct {
 }
 
 type ConfigSource struct {
-	DatabaseURL string `toml:"database_url"`
+	DatabaseURL          string `toml:"database_url"`
+	BeforeTransactionSQL string `toml:"before_transaction_sql"`
 }
 
 type ConfigDestination struct {
@@ -61,6 +62,14 @@ func pgPartialCopy(ctx context.Context, config *Config) error {
 		return fmt.Errorf("error connecting to source database: %w", err)
 	}
 	defer sourceConn.Close(ctx)
+
+	if config.Source.BeforeTransactionSQL != "" {
+		err := sourceConn.Exec(ctx, config.Source.BeforeTransactionSQL).Close()
+		if err != nil {
+			return fmt.Errorf("error executing before transaction SQL: %w", err)
+		}
+		slog.Info("Executed before transaction SQL")
+	}
 
 	result := sourceConn.ExecParams(ctx, "begin isolation level serializable read only deferrable", nil, nil, nil, nil).Read()
 	if result.Err != nil {

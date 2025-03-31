@@ -29,6 +29,14 @@ Config file is a [TOML](https://toml.io/) file.
 # database_url is a URL or key-value connection string. It is required.
 database_url = "dbname=source"
 
+# before_transaction_sql is SQL that is run before the read-only transaction is started. A common use case would be to
+# create a temporary table and populate it with data that will be used in steps with select_sql.
+before_transaction_sql = """
+create temporary table selected_people (id uuid)
+select id
+from people tablesample bernoulli(10)
+"""
+
 # destination is the database to which data will be copied.
 [destination]
 # database_url is a URL or key-value connection string. It is required.
@@ -55,7 +63,7 @@ before_copy_sql = "create temporary table temp_people (like people)"`)
 table_name = "temp_people"
 
 # If table_name is not the name of the source table then select_sql must be provided.
-select_sql = "select * from people"
+select_sql = "select p.* from people p join selected_people sp using(id)"
 
 after_copy_sql = """
 update temp_people set foo = 'bar';

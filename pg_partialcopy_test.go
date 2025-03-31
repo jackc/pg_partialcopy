@@ -269,3 +269,30 @@ insert into a (id) select id from temp_a;
 	require.Equal(t, "20", string(result.Rows[1][0]))
 	require.Equal(t, "30", string(result.Rows[2][0]))
 }
+
+func TestPGPartialCopyBeforeTransactionSQL(t *testing.T) {
+	ctx := t.Context()
+	err := parseAndRun(ctx, `[source]
+database_url = "dbname=pg_partialcopy_test_source"
+before_transaction_sql = """
+create temporary table selected_a_ids (id int primary key);
+insert into selected_a_ids (id) values (1), (2);
+"""
+
+[destination]
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
+
+[[steps]]
+table_name = "a"
+select_sql = "select a.* from a join selected_a_ids s on a.id=s.id"
+`)
+	require.NoError(t, err)
+
+	destinationConn := connectToDestination(t)
+	result := destinationConn.ExecParams(ctx, "select * from a order by id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 2, len(result.Rows))
+	require.Equal(t, "1", string(result.Rows[0][0]))
+	require.Equal(t, "2", string(result.Rows[1][0]))
+}
