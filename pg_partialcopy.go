@@ -326,6 +326,7 @@ func executeStep(ctx context.Context, sourceConn, destinationConn *pgconn.PgConn
 		}
 		_, err := sourceConn.CopyTo(ctx, w, copyToSQL)
 		if err != nil {
+			w.CloseWithError(err)
 			return err
 		}
 
@@ -336,6 +337,7 @@ func executeStep(ctx context.Context, sourceConn, destinationConn *pgconn.PgConn
 		copyFromSQL := fmt.Sprintf("copy %s from stdin", step.TableName)
 		_, err := destinationConn.CopyFrom(ctx, r, copyFromSQL)
 		if err != nil {
+			r.CloseWithError(err)
 			return err
 		}
 
