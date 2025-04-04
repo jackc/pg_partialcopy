@@ -2,12 +2,12 @@
 
 # pg_partialcopy
 
-pg_partialcopy is a tool for making a consistent copy of a specified subset of a database.
+`pg_partialcopy` is a tool for making a consistent copy of a specified subset of a database.
 
 The primary use case of this tool is for developers who need production-like data for development. Using a copy of
 production in development is often impossible due to the size of production as well as security and compliance concerns.
 
-pg_partialcopy can filter the rows that are copied as well as transform the copied data to redact sensitive data.
+`pg_partialcopy` can filter the rows that are copied as well as transform the copied data to redact sensitive data.
 
 ## Installation
 
@@ -26,6 +26,17 @@ pg_partialcopy -init -source='service=your-prod-service' -destination='dbname=lo
 `source` and `destination` can be a database URL or a key-value connection string.
 
 This command will connect to your source database, inspect it, and create a config file that will backup every row of every table.
+
+By default, each table has a `select_sql` option that specifies each column to be included. This ensures that if a
+column is added to a source database, it is not automatically included. This is important to ensure sensitive data is
+not inadvertently copied. However, you can use the `omitselectsql` option to omit the `select_sql` configuration for a
+more concise configuration file.
+
+The `destination.prepare_command` should usually be configured before a copy is performed. Typically, it will drop and recreate the destination database, but this must be configured manually. e.g.
+
+```
+prepare_command = "dropdb --if-exists my_copy && createdb my_copy"
+```
 
 To perform the partial copy:
 
