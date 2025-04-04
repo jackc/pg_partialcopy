@@ -55,7 +55,7 @@ func initConfigFile(ctx context.Context, configFilePath, sourceURL, destinationU
 		sql += ` 'select' || string_agg('
   ' || quote_ident(column_name), ', ') ||
   '
-from ' || quote_ident(table_schema) || '.' || quote_ident(table_name) || ';'`
+from ' || quote_ident(table_schema) || '.' || quote_ident(table_name)`
 	}
 	sql += ` as select_sql
 from information_schema.tables

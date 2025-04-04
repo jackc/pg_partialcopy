@@ -75,7 +75,8 @@ database_url = "dbname=destination"
 table_name = "users"
 
 # select_sql is a query that is used as the source for the copy. It can be used to filter or limit the rows returned as
-# will as transform values (typically to redact values).
+# will as transform values (typically to redact values). It is used as part of a copy command so it must not have a
+# semicolon at the end.
 # select_sql = "select id, name, 'redacted' as email from users limit 100"
 
 # select_sql, before_copy_sql, and after_copy_sql can be used for more advanced transformations such as using a temporary table.
