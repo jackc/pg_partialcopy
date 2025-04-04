@@ -9,8 +9,8 @@ import (
 )
 
 var initFlag = flag.Bool("init", false, "Initialize config file")
-var sourceURL = flag.String("source", "", "Source database URL or key-value connection string. Required if init is set.")
-var destinationURL = flag.String("destination", "", "Destination database URL or key-value connection string")
+var sourceURL = flag.String("source", "", "Source database URL or key-value connection string. Required if init is set. Overrides config file if run without init.")
+var destinationURL = flag.String("destination", "", "Destination database URL or key-value connection string. Overrides config file if run without init.")
 var omitSelectSQL = flag.Bool("omitselectsql", false, "Omit select_sql from the config file")
 
 func main() {
@@ -64,6 +64,13 @@ func main() {
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
+	}
+
+	if *sourceURL != "" {
+		config.Source.DatabaseURL = *sourceURL
+	}
+	if *destinationURL != "" {
+		config.Destination.DatabaseURL = *destinationURL
 	}
 
 	err = pgPartialCopy(ctx, config)
