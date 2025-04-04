@@ -12,6 +12,7 @@ import (
 	"text/template"
 
 	"github.com/BurntSushi/toml"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/sync/errgroup"
 )
@@ -40,41 +41,65 @@ type Step struct {
 }
 
 func initConfigFile(ctx context.Context, configFilePath, sourceURL, destinationURL string, omitSelectSQL bool) error {
-	sourceConn, err := pgconn.Connect(ctx, sourceURL)
+	sourceConn, err := pgx.Connect(ctx, sourceURL)
 	if err != nil {
 		return fmt.Errorf("error connecting to source database: %w", err)
 	}
 	defer sourceConn.Close(ctx)
 
+	selectSQLBuilder := &strings.Builder{}
 	var sql string
 	sql = `select
-	quote_ident(table_schema) || '.' || quote_ident(table_name) as table_name,`
-	if omitSelectSQL {
-		sql += ` ''`
-	} else {
-		sql += ` 'select' || string_agg('
-  ' || quote_ident(column_name), ', ') ||
-  '
-from ' || quote_ident(table_schema) || '.' || quote_ident(table_name)`
-	}
-	sql += ` as select_sql
+  quote_ident(table_schema) || '.' || quote_ident(table_name) as table_name,
+	array_agg(quote_ident(column_name) order by columns.ordinal_position) as column_names
 from information_schema.tables
-	join information_schema.columns using(table_schema, table_name)
+  join information_schema.columns using(table_schema, table_name)
 where table_schema not in ('information_schema', 'pg_catalog')
-	and table_type = 'BASE TABLE'
+  and table_type = 'BASE TABLE'
 group by table_schema, table_name
 order by table_schema, table_name;`
-
-	steps := []*Step{}
-	resultReader := sourceConn.ExecParams(ctx, sql, nil, nil, nil, nil)
-	for resultReader.NextRow() {
-		step := &Step{
-			TableName: string(resultReader.Values()[0]),
-			SelectSQL: string(resultReader.Values()[1]),
+	rows, _ := sourceConn.Query(ctx, sql)
+	steps, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (*Step, error) {
+		var tableName string
+		var columnNames []string
+		err := row.Scan(&tableName, &columnNames)
+		if err != nil {
+			return nil, err
 		}
-		steps = append(steps, step)
-	}
-	_, err = resultReader.Close()
+		totalColumnNamesLen := 0
+		for _, columnName := range columnNames {
+			totalColumnNamesLen += len(columnName) + 2 // + 2 for ", "
+		}
+
+		if !omitSelectSQL {
+			selectSQLBuilder.Reset()
+			if totalColumnNamesLen > 114 {
+				selectSQLBuilder.WriteString("select\n")
+				for i, columnName := range columnNames {
+					if i > 0 {
+						selectSQLBuilder.WriteString(",\n")
+					}
+					selectSQLBuilder.WriteString("  ")
+					selectSQLBuilder.WriteString(columnName)
+				}
+			} else {
+				selectSQLBuilder.WriteString("select ")
+				for i, columnName := range columnNames {
+					if i > 0 {
+						selectSQLBuilder.WriteString(", ")
+					}
+					selectSQLBuilder.WriteString(columnName)
+				}
+			}
+			selectSQLBuilder.WriteString("\nfrom ")
+			selectSQLBuilder.WriteString(tableName)
+		}
+
+		return &Step{
+			TableName: tableName,
+			SelectSQL: selectSQLBuilder.String(),
+		}, nil
+	})
 	if err != nil {
 		return fmt.Errorf("error executing SQL to get table names: %w", err)
 	}
