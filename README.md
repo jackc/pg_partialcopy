@@ -17,8 +17,20 @@ go install github.com/jackc/pg_partialcopy@latest
 
 ## Usage
 
+To create a initialize a new config file:
+
 ```
-pg_partialcopy <config-file>
+pg_partialcopy -init -source='service=your-prod-service' -destination='dbname=localcopy' yourconfig.toml
+```
+
+`source` and `destination` can be a database URL or a key-value connection string.
+
+This command will connect to your source database, inspect it, and create a config file that will backup every row of every table.
+
+To perform the partial copy:
+
+```
+pg_partialcopy yourconfig.toml
 ```
 
 Config file is a [TOML](https://toml.io/) file.

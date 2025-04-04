@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
+	"strings"
+	"text/template"
 
 	"github.com/BurntSushi/toml"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -34,6 +37,111 @@ type Step struct {
 	SelectSQL     string `toml:"select_sql"`
 	BeforeCopySQL string `toml:"before_copy_sql"`
 	AfterCopySQL  string `toml:"after_copy_sql"`
+}
+
+func initConfigFile(ctx context.Context, configFilePath, sourceURL, destinationURL string, omitSelectSQL bool) error {
+	sourceConn, err := pgconn.Connect(ctx, sourceURL)
+	if err != nil {
+		return fmt.Errorf("error connecting to source database: %w", err)
+	}
+	defer sourceConn.Close(ctx)
+
+	var sql string
+	sql = `select
+	quote_ident(table_schema) || '.' || quote_ident(table_name) as table_name,`
+	if omitSelectSQL {
+		sql += ` ''`
+	} else {
+		sql += ` 'select' || string_agg('
+  ' || quote_ident(column_name), ', ') ||
+  '
+from ' || quote_ident(table_schema) || '.' || quote_ident(table_name) || ';'`
+	}
+	sql += ` as select_sql
+from information_schema.tables
+	join information_schema.columns using(table_schema, table_name)
+where table_schema not in ('information_schema', 'pg_catalog')
+	and table_type = 'BASE TABLE'
+group by table_schema, table_name
+order by table_schema, table_name;`
+
+	steps := []*Step{}
+	resultReader := sourceConn.ExecParams(ctx, sql, nil, nil, nil, nil)
+	for resultReader.NextRow() {
+		step := &Step{
+			TableName: string(resultReader.Values()[0]),
+			SelectSQL: string(resultReader.Values()[1]),
+		}
+		steps = append(steps, step)
+	}
+	_, err = resultReader.Close()
+	if err != nil {
+		return fmt.Errorf("error executing SQL to get table names: %w", err)
+	}
+
+	file, err := os.Create(configFilePath)
+	if err != nil {
+		return fmt.Errorf("error creating config file: %w", err)
+	}
+	defer file.Close()
+
+	tmpl := template.Must(template.New("config").Parse(`# source is the database from which data will be copied.
+[source]
+# database_url is a URL or key-value connection string. It is required.
+database_url = {{.QuotedSourceURL}}
+
+# before_transaction_sql is SQL that is run before the read-only transaction is started. A common use case would be to
+# create a temporary table and populate it with data that will be used in steps with select_sql.
+# before_transaction_sql = ""
+
+# destination is the database to which data will be copied.
+[destination]
+# database_url is a URL or key-value connection string. It is required.
+database_url = {{.QuotedDestinationURL}}
+
+# prepare_command is command(s) that will be run to prepare the destination database. It is run with the "sh" shell.
+# Generally, it will optionally drop and create the empty destination database.
+# prepare_command = "dropdb --if-exists destination && createdb destination"
+
+# steps is an array of steps to execute.
+{{range .Steps -}}
+[[steps]]
+table_name = '{{.TableName}}'
+{{if .SelectSQL -}}
+select_sql = '''
+{{.SelectSQL}}
+'''
+{{end}}
+{{end -}}
+`))
+
+	sb := &strings.Builder{}
+	err = toml.NewEncoder(sb).Encode(sourceURL)
+	if err != nil {
+		return fmt.Errorf("error encoding source URL: %w", err)
+	}
+	quotedSourceURL := sb.String()
+	sb.Reset()
+	err = toml.NewEncoder(sb).Encode(destinationURL)
+	if err != nil {
+		return fmt.Errorf("error encoding destination URL: %w", err)
+	}
+	quotedDestinationURL := sb.String()
+
+	err = tmpl.Execute(file, struct {
+		QuotedSourceURL      string
+		QuotedDestinationURL string
+		Steps                []*Step
+	}{
+		QuotedSourceURL:      quotedSourceURL,
+		QuotedDestinationURL: quotedDestinationURL,
+		Steps:                steps,
+	})
+	if err != nil {
+		return fmt.Errorf("error writing config file: %w", err)
+	}
+
+	return nil
 }
 
 func parseConfigFile(configFilePath string) (*Config, error) {
