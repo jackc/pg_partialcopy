@@ -104,6 +104,29 @@ table_name = "a"`)
 	require.Equal(t, "3", string(result.Rows[2][0]))
 }
 
+func TestPGPartialCopyTextTemplateAndSprig(t *testing.T) {
+	ctx := t.Context()
+	t.Setenv("PG_PARTIALCOPY_TEST", "a")
+	err := parseAndRun(ctx, `[source]
+database_url = "dbname=pg_partialcopy_test_source"
+
+[destination]
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
+
+[[steps]]
+table_name = "{{env "PG_PARTIALCOPY_TEST"}}"`)
+	require.NoError(t, err)
+
+	destinationConn := connectToDestination(t)
+	result := destinationConn.ExecParams(ctx, "select * from a order by id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 3, len(result.Rows))
+	require.Equal(t, "1", string(result.Rows[0][0]))
+	require.Equal(t, "2", string(result.Rows[1][0]))
+	require.Equal(t, "3", string(result.Rows[2][0]))
+}
+
 func TestPGPartialCopySelectSQLFilterRows(t *testing.T) {
 	ctx := t.Context()
 	err := parseAndRun(ctx, `[source]
