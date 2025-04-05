@@ -15,6 +15,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/go-sprout/sprout"
+	"github.com/go-sprout/sprout/registry/env"
+	"github.com/go-sprout/sprout/registry/maps"
+	"github.com/go-sprout/sprout/registry/slices"
+	"github.com/go-sprout/sprout/registry/std"
+	sproutstrings "github.com/go-sprout/sprout/registry/strings"
 )
 
 type Config struct {
@@ -170,20 +177,38 @@ select_sql = '''
 }
 
 func parseConfigFile(configFilePath string) (*Config, error) {
-	var config Config
-	_, err := toml.DecodeFile(configFilePath, &config)
+	file, err := os.ReadFile(configFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
 
-	return &config, nil
+	return parseConfig(string(file))
 }
 
 func parseConfig(s string) (*Config, error) {
-	var config Config
-	_, err := toml.Decode(s, &config)
+	handler := sprout.New()
+	handler.AddRegistry(std.NewRegistry())
+	handler.AddRegistry(env.NewRegistry())
+	handler.AddRegistry(maps.NewRegistry())
+	handler.AddRegistry(slices.NewRegistry())
+	handler.AddRegistry(sproutstrings.NewRegistry())
+
+	tmpl, err := template.New("config").Funcs(handler.Build()).Parse(s)
 	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %w", err)
+		return nil, fmt.Errorf("error parsing config template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error executing config template: %w", err)
+	}
+	s = buf.String()
+
+	var config Config
+	_, err = toml.Decode(s, &config)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding config file: %w", err)
 	}
 
 	return &config, nil

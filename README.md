@@ -94,7 +94,16 @@ update temp_people set foo = 'bar';
 insert into people select * from temp_people;
 drop table temp_people;
 """
+```
 
+Config files are processed through [text/template](https://pkg.go.dev/text/template). [sprout](https://github.com/go-sprout/sprout) functions from the `std`, `env`, `maps`, `slices`, and `strings` repositories are available.
+
+This would most commonly be used to insert environment variables into a config file. e.g.
+
+```toml
+[destination]
+# database_url is a URL or key-value connection string. It is required.
+database_url = "dbname={{env "DESTDB"}}"
 ```
 
 ## How It Works
