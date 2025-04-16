@@ -269,6 +269,12 @@ func pgPartialCopy(ctx context.Context, config *Config) error {
 	}
 	defer destinationConn.Close(ctx)
 
+	err = copySequenceValues(ctx, sourceConn, destinationConn)
+	if err != nil {
+		return fmt.Errorf("error copying sequence values: %w", err)
+	}
+	slog.Info("Copied sequence values")
+
 	recreateForeignKeyConstraintCommands, err := dropForeignKeyConstraints(ctx, destinationConn)
 	if err != nil {
 		return fmt.Errorf("error dropping foreign key constraints: %w", err)
@@ -402,6 +408,26 @@ func executeStep(ctx context.Context, sourceConn, destinationConn *pgconn.PgConn
 		err := destinationConn.Exec(ctx, step.AfterCopySQL).Close()
 		if err != nil {
 			return fmt.Errorf("error executing after copy SQL: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func copySequenceValues(ctx context.Context, sourceConn, destinationConn *pgconn.PgConn) error {
+	result := sourceConn.ExecParams(
+		ctx,
+		`select format('%I.%I', schemaname, sequencename), last_value from pg_sequences`,
+		nil, nil, nil, nil,
+	).Read()
+	if result.Err != nil {
+		return result.Err
+	}
+
+	for _, row := range result.Rows {
+		result = destinationConn.ExecParams(ctx, `select setval($1, $2)`, row, nil, nil, nil).Read()
+		if result.Err != nil {
+			return result.Err
 		}
 	}
 

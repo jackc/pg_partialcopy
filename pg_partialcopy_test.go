@@ -27,6 +27,21 @@ create table b (
 	id int primary key references a
 );
 insert into b (id) values (1), (2), (3);
+
+drop table if exists c;
+create table c (
+	id serial primary key,
+	name text not null
+);
+insert into c (name) values ('Moe'), ('Larry'), ('Curly');
+
+drop schema if exists "special characters" cascade;
+create schema "special characters";
+create table "special characters"."Foo bar" (
+	id serial primary key,
+	name text not null
+);
+insert into "special characters"."Foo bar" (name) values ('Ricky'), ('Lucy');
 `
 
 func TestMain(m *testing.M) {
@@ -318,4 +333,59 @@ select_sql = "select a.* from a join selected_a_ids s on a.id=s.id"
 	require.Equal(t, 2, len(result.Rows))
 	require.Equal(t, "1", string(result.Rows[0][0]))
 	require.Equal(t, "2", string(result.Rows[1][0]))
+}
+
+func TestPGPartialCopySequence(t *testing.T) {
+	ctx := t.Context()
+	err := parseAndRun(ctx, `[source]
+database_url = "dbname=pg_partialcopy_test_source"
+
+[destination]
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
+
+[[steps]]
+table_name = "c"`)
+	require.NoError(t, err)
+
+	destinationConn := connectToDestination(t)
+	result := destinationConn.ExecParams(ctx, "select name from c order by id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 3, len(result.Rows))
+	require.Equal(t, "Moe", string(result.Rows[0][0]))
+	require.Equal(t, "Larry", string(result.Rows[1][0]))
+	require.Equal(t, "Curly", string(result.Rows[2][0]))
+
+	// Ensure the sequence has been restored.
+	result = destinationConn.ExecParams(ctx, "insert into c (name) values ('Shemp') returning id", nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 1, len(result.Rows))
+	require.Equal(t, "4", string(result.Rows[0][0]))
+}
+
+func TestPGPartialCopySpecialCharactersInIdentifiers(t *testing.T) {
+	ctx := t.Context()
+	err := parseAndRun(ctx, `[source]
+database_url = "dbname=pg_partialcopy_test_source"
+
+[destination]
+prepare_command = "dropdb --if-exists pg_partialcopy_test_destination && createdb pg_partialcopy_test_destination"
+database_url = "dbname=pg_partialcopy_test_destination"
+
+[[steps]]
+table_name = '"special characters"."Foo bar"'`)
+	require.NoError(t, err)
+
+	destinationConn := connectToDestination(t)
+	result := destinationConn.ExecParams(ctx, `select name from "special characters"."Foo bar" order by id`, nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 2, len(result.Rows))
+	require.Equal(t, "Ricky", string(result.Rows[0][0]))
+	require.Equal(t, "Lucy", string(result.Rows[1][0]))
+
+	// Ensure the sequence has been restored.
+	result = destinationConn.ExecParams(ctx, `insert into "special characters"."Foo bar" (name) values ('Fred') returning id`, nil, nil, nil, nil).Read()
+	require.NoError(t, result.Err)
+	require.Equal(t, 1, len(result.Rows))
+	require.Equal(t, "3", string(result.Rows[0][0]))
 }
